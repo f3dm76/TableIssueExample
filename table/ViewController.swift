@@ -7,12 +7,15 @@
 
 import UIKit
 
-class ViewController: UIViewController, UITableViewDataSource, UITableViewDelegate {
+class ViewController: UIViewController {
 
     @IBOutlet var tableView: UITableView!
 
     var models: [Model] = []
     var timer: Timer?
+
+    private let cellReuseIdentifier = "cell"
+    private lazy var dataSource = makeDataSource()
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -21,69 +24,51 @@ class ViewController: UIViewController, UITableViewDataSource, UITableViewDelega
         tableView.rowHeight = UITableView.automaticDimension
         tableView.transform = CGAffineTransform(rotationAngle: .pi)
 
+        //tableView.register(Cell.self, forCellReuseIdentifier: cellReuseIdentifier)
+        tableView.dataSource = dataSource
+
         models = (0..<10).map { _ in Model(property: .three) }
         models[1].property = .two
         models[0].property = .one
 
-        timer = Timer.scheduledTimer(timeInterval: 3.0, target: self, selector: #selector(fireTimer), userInfo: nil, repeats: true)
+        update(with: models, animate: true)
+
+        timer = Timer.scheduledTimer(timeInterval: 1.0, target: self, selector: #selector(fireTimer), userInfo: nil, repeats: true)
     }
 
     @objc func fireTimer() {
         let prevModels = models
         models[1].property = .three
         models[0].property = .two
+        update(with: models, animate: false)
+
         models.insert(Model(), at: 0)
-
-        tableView.beginUpdates()
-        let dif = models.difference(from: prevModels)
-
-        // if a single message has both a removal and an insertion - then it's an edit and shouldn't be animated
-        // collect all duplicate ids to determine where the edits are
-        var ids: [String] = []
-        var editIds: [String] = []
-        for change in dif {
-            switch change {
-            case let .remove(_, model, _), let .insert(_, model, _):
-                if ids.contains(model.id) {
-                    editIds.append(model.id)
-                } else {
-                    ids.append(model.id)
-                }
-            }
-        }
-
-        // animate insertions and removals, but not edits
-        for change in dif {
-            switch change {
-            case let .remove(offset, model, _):
-                let isEdit = editIds.contains(model.id)
-                print("removal", isEdit ? "edit" : "", offset, model.property, model.text.prefix(10))
-
-                tableView.deleteRows(at: [IndexPath(row: offset, section: 0)], with: isEdit ? .none: .top)
-            case let .insert(offset, model, _):
-                let isEdit = editIds.contains(model.id)
-                print("insertion", isEdit ? "edit" : "", offset, model.property, model.text.prefix(10))
-
-                tableView.insertRows(at: [IndexPath(row: offset, section: 0)], with: isEdit ? .none: .top)
-            }
-        }
-        print()
-
-        tableView.endUpdates()
+        update(with: models, animate: true)
     }
 
-    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        models.count
+    func update(with list: [Model], animate: Bool = true) {
+        var snapshot = NSDiffableDataSourceSnapshot<Int, Model>()
+        snapshot.appendSections([0])
+        snapshot.appendItems(list, toSection: 0)
+        dataSource.defaultRowAnimation = .top
+        dataSource.apply(snapshot, animatingDifferences: animate)
     }
 
-    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: "cell") as? Cell
-        cell?.titleLabel?.text = models[indexPath.row].text
-        cell?.propertyLabel?.text = models[indexPath.row].property.rawValue
-        cell?.bgView?.backgroundColor = models[indexPath.row].property.color
-        cell?.bgView?.layer.cornerRadius = 10
-        cell?.transform = CGAffineTransform(rotationAngle: .pi)
-        return cell ?? UITableViewCell()
+    func makeDataSource() -> UITableViewDiffableDataSource<Int, Model> {
+        let reuseIdentifier = cellReuseIdentifier
+
+        return UITableViewDiffableDataSource(
+            tableView: tableView,
+            cellProvider: { tableView, indexPath, model in
+                let cell = tableView.dequeueReusableCell(withIdentifier: reuseIdentifier, for: indexPath) as? Cell
+                cell?.titleLabel?.text = model.text
+                cell?.propertyLabel?.text = model.property.rawValue
+                cell?.bgView?.backgroundColor = model.property.color
+                cell?.bgView?.layer.cornerRadius = 10
+                cell?.transform = CGAffineTransform(rotationAngle: .pi)
+                return cell ?? UITableViewCell()
+            }
+        )
     }
 }
 

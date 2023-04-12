@@ -7,7 +7,7 @@
 
 import UIKit
 
-struct Model: Equatable {
+struct Model: Equatable, Hashable {
 
     enum Property: String {
         case one, two, three
